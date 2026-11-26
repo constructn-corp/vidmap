@@ -84,25 +84,13 @@ def da3_cache_identity(backend: Da3VideoOptions) -> dict:
     }
 
 
-EXTERNAL_DEPTH_BACKEND_API = ("cache_identity", "run_depth")
-
-
-def external_depth_backend(module_name: str):
-    """Import an external depth backend module and check that it provides the backend API."""
-    module = importlib.import_module(module_name)
-    missing = [name for name in EXTERNAL_DEPTH_BACKEND_API if not callable(getattr(module, name, None))]
-    if missing:
-        raise TypeError(f"External depth backend {module_name!r} does not define {', '.join(missing)}")
-    return module
-
-
 def depth_backend_identity(options: DepthEstimationOptions) -> dict:
     """Return the identity of the depth implementation selected by ``options``, for cache keys."""
     if options.external_backend is None:
         return da3_cache_identity(options.backend)
     return {
         "external_backend": options.external_backend,
-        "identity": external_depth_backend(options.external_backend).cache_identity(options),
+        "identity": importlib.import_module(options.external_backend).cache_identity(options),
         "torch": torch.__version__,
     }
 
@@ -116,7 +104,7 @@ def run_depth_backend(options: DepthEstimationOptions, *args, **kwargs):
     """
     if options.external_backend is None:
         return _run_da3_depth(*args, **kwargs)
-    return external_depth_backend(options.external_backend).run_depth(*args, **kwargs)
+    return importlib.import_module(options.external_backend).run_depth(*args, **kwargs)
 
 
 def _depth_options_cache_config(options):

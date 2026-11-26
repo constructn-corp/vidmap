@@ -1,10 +1,9 @@
 """Schemas owned by frontend depth estimation."""
 
-import re
 from dataclasses import field as dc_field
 from typing import Literal
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field
 
 from vidmap.configuration.validators import dataclass
 from vidmap.frontend.options.matching import PreprocessingOptions
@@ -34,13 +33,6 @@ class DepthEstimationOptions:
     # ``cache_identity(options) -> dict`` and ``run_depth(...)`` with the signature of
     # ``vidmap.frontend.depth._run_da3_depth``; see ``vidmap.frontend.depth.run_depth_backend``.
     external_backend: str | None = dc_field(default=None, metadata={"omit_default": True})
-
-    @field_validator("external_backend")
-    @classmethod
-    def _validate_external_backend(cls, value):
-        if value is not None and not re.fullmatch(r"[A-Za-z_]\w*(\.[A-Za-z_]\w*)*", value):
-            raise ValueError(f"depth.external_backend must be a dotted Python module name, got {value!r}")
-        return value
 
     @property
     def depth_model(self) -> str:

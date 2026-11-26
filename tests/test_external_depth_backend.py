@@ -34,12 +34,6 @@ def test_external_backend_has_its_own_cache_token_and_keys():
     assert config_to_dict(options)["external_backend"] == "pkg.pano_depth"
 
 
-@pytest.mark.parametrize("name", ["", "../adapter", "pano-depth", "pkg..mod", "1mod", "mod.py/x"])
-def test_external_backend_must_be_a_module_name(name):
-    with pytest.raises(ValueError, match="dotted Python module name"):
-        DepthEstimationOptions(external_backend=name)
-
-
 def test_frontend_config_accepts_the_external_backend_from_a_mapping():
     config = FrontendConfig(depth={"external_backend": "pano_adapter", "backend": {"compile": False}})
     assert config.depth.external_backend == "pano_adapter"
@@ -70,14 +64,3 @@ def test_external_backend_receives_the_da3_arguments_and_names_the_cache(monkeyp
     identity = depth.depth_backend_identity(options)
     assert identity["external_backend"] == "fake_depth_backend"
     assert identity["identity"] == {"model": "pano", "batch_size": 2}
-
-
-def test_external_backend_without_the_api_is_rejected(monkeypatch):
-    _backend_module(monkeypatch, name="incomplete_depth_backend", cache_identity=lambda options: {})
-    with pytest.raises(TypeError, match="does not define run_depth"):
-        depth.external_depth_backend("incomplete_depth_backend")
-
-
-def test_missing_external_backend_module_fails_on_import():
-    with pytest.raises(ModuleNotFoundError):
-        depth.external_depth_backend("vidmap_no_such_depth_backend")
