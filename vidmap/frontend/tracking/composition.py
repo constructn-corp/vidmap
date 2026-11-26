@@ -182,9 +182,11 @@ class TrackingPipeline:
                         calibrations={},
                     )
                 )
-                from vidmap.frontend.models.depth.da3_video import verify_da3_model_snapshot
+                # An external depth backend never loads DA3, so its checkpoint is not fetched.
+                if options.depth.external_backend is None:
+                    from vidmap.frontend.models.depth.da3_video import verify_da3_model_snapshot
 
-                verification = preparation.submit(verify_da3_model_snapshot)
+                    verification = preparation.submit(verify_da3_model_snapshot)
                 keyframes, tracks = sparse_track_builder.admit_and_build_tracks(
                     candidates,
                     (

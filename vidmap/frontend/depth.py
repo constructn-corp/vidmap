@@ -1,5 +1,6 @@
 """Depth frontend and cache reuse."""
 
+import importlib
 import logging
 import sys
 from contextlib import nullcontext
@@ -83,8 +84,35 @@ def da3_cache_identity(backend: Da3VideoOptions) -> dict:
     }
 
 
+def depth_backend_identity(options: DepthEstimationOptions) -> dict:
+    """Return the identity of the depth implementation selected by ``options``, for cache keys."""
+    if options.external_backend is None:
+        return da3_cache_identity(options.backend)
+    return {
+        "external_backend": options.external_backend,
+        "identity": importlib.import_module(options.external_backend).cache_identity(options),
+        "torch": torch.__version__,
+    }
+
+
+def run_depth_backend(options: DepthEstimationOptions, *args, **kwargs):
+    """Run the depth backend selected by ``options``.
+
+    ``args`` and ``kwargs`` are those of ``_run_da3_depth``. An external backend's ``run_depth``
+    receives them unchanged and writes its payloads with ``write_sampled_depth_cache`` and
+    ``write_full_depth_cache``, as DA3 does.
+    """
+    if options.external_backend is None:
+        return _run_da3_depth(*args, **kwargs)
+    return importlib.import_module(options.external_backend).run_depth(*args, **kwargs)
+
+
 def _depth_options_cache_config(options):
-    return semantic_config(options, exclude_fields=_RUNTIME_CONFIG_FIELDS)
+    config = semantic_config(options, exclude_fields=_RUNTIME_CONFIG_FIELDS)
+    # Unset, the external backend leaves the cache keys of DA3 runs as they were.
+    if options.external_backend is None:
+        config.pop("external_backend", None)
+    return config
 
 
 def _depth_ordered_inputs(image_names, image_content_fingerprint, stream_sequences):
@@ -112,7 +140,7 @@ def _prepare_full_depth_cache(
         stage="full_depth",
         config={
             "options": _depth_options_cache_config(options),
-            "backend": da3_cache_identity(options.backend),
+            "backend": depth_backend_identity(options),
             "native_resolution": True,
         },
         ordered_inputs=inputs,
@@ -416,7 +444,7 @@ class DepthEstimator:
             stage="depth",
             config={
                 "options": _depth_options_cache_config(self.options),
-                "backend": da3_cache_identity(self.options.backend),
+                "backend": depth_backend_identity(self.options),
             },
             ordered_inputs=ordered_inputs,
             upstream={"sparse_features": artifact_fingerprint(sparse_features_metadata)},
@@ -463,7 +491,8 @@ class DepthEstimator:
         pending_names = [name for name in image_names if name in sampled_names or name in full_names]
         if pending_names:
             logger.info("Estimating depth maps for %d images", len(pending_names))
-            _run_da3_depth(
+            run_depth_backend(
+                self.options,
                 self.scene_parser,
                 image_names,
                 pending_names,
@@ -527,7 +556,8 @@ def cache_full_depth_maps_posthoc(
     )
     if missing:
         logger.info("Post-hoc full-depth frontend: processing %d keyframes", len(missing))
-        _run_da3_depth(
+        run_depth_backend(
+            options,
             scene_parser,
             image_names,
             missing,

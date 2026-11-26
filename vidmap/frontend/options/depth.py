@@ -29,8 +29,14 @@ class DepthEstimationOptions:
     )
     batch_size: int = Field(default=4, ge=1)
     num_workers: int = 4
+    # Importable module (dotted name) that replaces the DA3 backend. It must define
+    # ``cache_identity(options) -> dict`` and ``run_depth(...)`` with the signature of
+    # ``vidmap.frontend.depth._run_da3_depth``; see ``vidmap.frontend.depth.run_depth_backend``.
+    external_backend: str | None = dc_field(default=None, metadata={"omit_default": True})
 
     @property
     def depth_model(self) -> str:
         """Stable cache token consumed by the current pipeline setup boundary."""
+        if self.external_backend is not None:
+            return "external_" + self.external_backend.replace(".", "_")
         return f"da3_video_w{self.backend.window_size}"
